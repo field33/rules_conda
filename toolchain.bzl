@@ -4,14 +4,16 @@ package(default_visibility = ["//visibility:public"])
 load("@bazel_tools//tools/python:toolchain.bzl", "py_runtime_pair")
 
 py_runtime_pair(
-    name = "runtimes",
+    name = "runtimes_{toolchain_name}",
     py2_runtime = {py2_runtime},
     py3_runtime = {py3_runtime}
 )
 
 toolchain(
     name = "{toolchain_name}",
-    toolchain = ":runtimes",
+    toolchain = ":runtimes_{toolchain_name}",
+    target_compatible_with = [{compatible_with}],
+    exec_compatible_with = [{compatible_with}],
     toolchain_type = "@bazel_tools//tools/python:toolchain_type",
 )
 """
@@ -24,6 +26,10 @@ def _toolchain_impl(rctx):
     py2_runtime_value = "\"{}\"".format(py2_runtime) if py2_runtime else "None"
     py3_runtime_value = "\"{}\"".format(py3_runtime)
 
+    compatible_with_elements = []
+    for compat in rctx.attr.compat_with:
+      compatible_with_elements.append("\"{}\"".format(compat))
+
     # create BUILD file with toolchain definition
     rctx.file(
         "BUILD",
@@ -31,6 +37,7 @@ def _toolchain_impl(rctx):
             py2_runtime = py2_runtime_value,
             py3_runtime = py3_runtime_value,
             toolchain_name = rctx.attr.toolchain_name,
+            compatible_with = ", ".join(compatible_with_elements),
         ),
     )
 
@@ -40,5 +47,6 @@ toolchain_rule = repository_rule(
         "py2_runtime": attr.label(mandatory = False),
         "py3_runtime": attr.label(mandatory = True),
         "toolchain_name": attr.string(mandatory = True),
+        "compat_with": attr.label_list(mandatory = True),
     },
 )
