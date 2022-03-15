@@ -43,6 +43,13 @@ def _create_empty_environment(rctx, executable, env_name):
     if result.return_code:
         fail("Failure creating empty environment.\nstdout: {}\nstderr: {}".format(result.stdout, result.stderr))
 
+def _create_environment_from_lockfile(rctx, executable, env_name, lock_file):
+    rctx.report_progress("Creating environment from conda-lock lockfile")
+    args = ["conda-lock", "install", "-p", "./{}".format(env_name), lock_file ]
+    result = rctx.execute(args, quiet = rctx.attr.quiet, timeout = rctx.attr.timeout)
+    if result.return_code:
+        fail("Failure creating environment from lockfile environment.\nstdout: {}\nstderr: {}".format(result.stdout, result.stderr))
+
 def _update_environment(rctx, executable, env_name, env_file):
     rctx.report_progress("Updating empty conda environment to populate it")
     args = [executable, "env", "update", "-f", env_file, "-p", "./{}".format(env_name)]
@@ -51,14 +58,17 @@ def _update_environment(rctx, executable, env_name, env_file):
         fail("Failure updating environment.\nstdout: {}\nstderr: {}".format(result.stdout, result.stderr))
 
 # create new local conda environment from file
-def _create_environment(rctx, executable, env_name):
+def _create_environment(rctx, executable, env_name, is_lockfile):
     rctx.report_progress("Creating conda environment")
 
     # path to env file as string
     env_file = rctx.path(rctx.attr.environment)
 
-    _create_empty_environment(rctx, executable, env_name)
-    _update_environment(rctx, executable, env_name, env_file)
+    if is_lockfile:
+        _create_environment_from_lockfile(rctx, executable, env_name, env_file)
+    else:
+        _create_empty_environment(rctx, executable, env_name)
+        _update_environment(rctx, executable, env_name, env_file)
 
 # check if python2 or python3 has been installed
 def _get_py_major(rctx, env_path, interpreter_path):
@@ -85,7 +95,7 @@ def _create_env_build_file(rctx, env_name):
 def _conda_create_impl(rctx):
     executable = _user_chosen_executable(rctx)
     env_name = rctx.name
-    _create_environment(rctx, executable, env_name)
+    _create_environment(rctx, executable, env_name, rctx.attr.is_lockfile)
     if rctx.attr.clean:
         _clean(rctx, executable)
     _create_env_build_file(rctx, env_name)
@@ -115,6 +125,10 @@ conda_create_rule = repository_rule(
         "clean": attr.bool(
             default = False,
             doc = "True if conda cache should be cleaned",
+        ),
+        "is_lockfile": attr.bool(
+            default = False,
+            doc = "True if installing from a lockfile generated via conda-lock",
         ),
     },
 )
